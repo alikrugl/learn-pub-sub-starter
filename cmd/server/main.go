@@ -26,6 +26,18 @@ func main() {
 
 	fmt.Println("AMQP connection was established successfully...")
 
+	_, queue, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		amqp.Persistent,
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
+	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
+
 	gamelogic.PrintServerHelp()
 	for {
 		words := gamelogic.GetInput()
