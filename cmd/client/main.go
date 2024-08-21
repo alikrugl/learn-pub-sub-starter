@@ -20,29 +20,22 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Peril game client connected to RabbitMQ!")
 
+	publishCh, err := conn.Channel()
+	if err != nil {
+		fmt.Printf("could not create channel: %v", err)
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		fmt.Printf("could not get username: %v", err)
 	}
-
-	_, queue, err := pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username,
-		routing.PauseKey,
-		amqp.Transient,
-	)
-	if err != nil {
-		fmt.Printf("could not declare queue: %v", err)
-	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gameState := gamelogic.NewGameState(username)
 
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		queue.Name,
+		routing.PauseKey+"."+gameState.GetUsername(),
 		routing.PauseKey,
 		amqp.Transient,
 		handlerPause(gameState),
@@ -51,6 +44,19 @@ func main() {
 		fmt.Printf("could not subscribe to pause: %v", err)
 	}
 	fmt.Println("Subscribed to pause messages!")
+
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+gameState.GetUsername(),
+		routing.ArmyMovesPrefix+".*",
+		amqp.Transient,
+		handlerMove(gameState),
+	)
+	if err != nil {
+		fmt.Printf("could not subscribe to army moves: %v", err)
+	}
+	fmt.Println("Subscribed to army moves messages!")
 
 	for {
 		words := gamelogic.GetInput()
@@ -65,9 +71,20 @@ func main() {
 				fmt.Printf("could not spawn: %v", err)
 			}
 		case "move":
-			_, err := gameState.CommandMove(words)
+			mv, err := gameState.CommandMove(words)
 			if err != nil {
 				fmt.Printf("could not move: %v", err)
+				continue
+			}
+
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilTopic,
+				routing.ArmyMovesPrefix+"."+mv.Player.Username,
+				mv,
+			)
+			if err != nil {
+				fmt.Printf("could not publish: %v", err)
 				continue
 			}
 		case "status":

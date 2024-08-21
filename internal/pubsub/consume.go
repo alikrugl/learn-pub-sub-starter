@@ -80,16 +80,18 @@ func SubscribeJSON[T any](
 		return err
 	}
 	go func() {
-		for d := range msgs {
+		defer ch.Close()
+		for msg := range msgs {
 			var val T
-			err := json.Unmarshal(d.Body, &val)
+			err := json.Unmarshal(msg.Body, &val)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("could not unmarshal message: %v\n", err)
+				continue
 			}
 			handler(val)
-			d.Ack(false)
+			msg.Ack(false)
 		}
 	}()
-	
+
 	return nil
 }
