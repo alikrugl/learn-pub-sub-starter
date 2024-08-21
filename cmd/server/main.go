@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -15,13 +14,13 @@ func main() {
 
 	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		log.Fatalf("could not connect to RabbitMQ: %v", err)
+		fmt.Printf("could not connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
 
 	channel, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("could not open a channel: %v", err)
+		fmt.Printf("could not open a channel: %v", err)
 	}
 
 	fmt.Println("AMQP connection was established successfully...")
@@ -34,7 +33,7 @@ func main() {
 		amqp.Persistent,
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)
+		fmt.Printf("could not subscribe to pause: %v", err)
 	}
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 

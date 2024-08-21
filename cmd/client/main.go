@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -16,14 +15,14 @@ func main() {
 	const rabbitConnString = "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		log.Fatalf("could not connect to RabbitMQ: %v", err)
+		fmt.Printf("could not connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
 	fmt.Println("Peril game client connected to RabbitMQ!")
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		log.Fatalf("could not get username: %v", err)
+		fmt.Printf("could not get username: %v", err)
 	}
 
 	_, queue, err := pubsub.DeclareAndBind(
@@ -34,11 +33,25 @@ func main() {
 		amqp.Transient,
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)
+		fmt.Printf("could not declare queue: %v", err)
 	}
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gameState := gamelogic.NewGameState(username)
+
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		queue.Name,
+		routing.PauseKey,
+		amqp.Transient,
+		handlerPause(gameState),
+	)
+	if err != nil {
+		fmt.Printf("could not subscribe to pause: %v", err)
+	}
+	fmt.Println("Subscribed to pause messages!")
+
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -49,12 +62,13 @@ func main() {
 		case "spawn":
 			err := gameState.CommandSpawn(words)
 			if err != nil {
-				log.Fatalf("could not spawn: %v", err)
+				fmt.Printf("could not spawn: %v", err)
 			}
 		case "move":
 			_, err := gameState.CommandMove(words)
 			if err != nil {
-				log.Fatalf("could not move: %v", err)
+				fmt.Printf("could not move: %v", err)
+				continue
 			}
 		case "status":
 			gameState.CommandStatus()
