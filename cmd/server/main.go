@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -14,48 +15,67 @@ func main() {
 
 	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		fmt.Printf("could not connect to RabbitMQ: %v", err)
+		log.Fatalf("could not connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
+	fmt.Println("Peril game server connected to RabbitMQ!")
 
-	channel, err := conn.Channel()
+	publishCh, err := conn.Channel()
 	if err != nil {
-		fmt.Printf("could not open a channel: %v", err)
+		log.Fatalf("could not create channel: %v", err)
 	}
-
-	fmt.Println("AMQP connection was established successfully...")
 
 	_, queue, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
 		routing.GameLogSlug+".*",
-		amqp.Persistent,
+		pubsub.SimpleQueueDurable,
 	)
 	if err != nil {
-		fmt.Printf("could not subscribe to pause: %v", err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gamelogic.PrintServerHelp()
+
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
 			continue
 		}
-
 		switch words[0] {
 		case "pause":
-			fmt.Println("Sending the pause message...")
-			pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			fmt.Println("Publishing paused game state")
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{
+					IsPaused: true,
+				},
+			)
+			if err != nil {
+				log.Printf("could not publish time: %v", err)
+			}
 		case "resume":
-			fmt.Println("Sending the resume message...")
-			pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
+			fmt.Println("Publishing resumes game state")
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{
+					IsPaused: false,
+				},
+			)
+			if err != nil {
+				log.Printf("could not publish time: %v", err)
+			}
 		case "quit":
-			fmt.Println("Exiting iteration...")
+			log.Println("goodbye")
 			return
 		default:
-			fmt.Println("I don't understand the command")
+			fmt.Println("unknown command")
 		}
 	}
 }
