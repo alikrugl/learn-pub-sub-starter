@@ -12,10 +12,11 @@ import (
 func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogic.ArmyMove) pubsub.Acktype {
 	return func(move gamelogic.ArmyMove) pubsub.Acktype {
 		defer fmt.Print("> ")
+
 		moveOutcome := gs.HandleMove(move)
 		switch moveOutcome {
 		case gamelogic.MoveOutcomeSamePlayer:
-			return pubsub.NackDiscard
+			return pubsub.Ack
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
 		case gamelogic.MoveOutcomeMakeWar:
@@ -34,25 +35,53 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 			}
 			return pubsub.Ack
 		}
+
 		fmt.Println("error: unknown move outcome")
 		return pubsub.NackDiscard
 	}
 }
 
-func handlerWar(gs *gamelogic.GameState) func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
+func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
 	return func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
 		defer fmt.Print("> ")
-		warOutcome, _, _ := gs.HandleWar(dw)
+		warOutcome, winner, loser := gs.HandleWar(dw)
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeYouWon:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeDraw:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		}
 
