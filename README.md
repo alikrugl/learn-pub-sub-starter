@@ -14,12 +14,12 @@ A message broker is a middleman that allows different parts of the system to com
 
 ### Conection [package link](https://github.com/rabbitmq/amqp091-go)
 ```go
-    import amqp "github.com/rabbitmq/amqp091-go"
+import amqp "github.com/rabbitmq/amqp091-go"
 
-    conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-    defer conn.Close()
+conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+defer conn.Close()
 
-    publishCh, err := conn.Channel()
+publishCh, err := conn.Channel()
 ```
 
 ### [Exchange](https://www.rabbitmq.com/tutorials/amqp-concepts#exchanges)
@@ -44,58 +44,58 @@ Messages are not published directly to a queue. Instead, the producer sends mess
 - [Auto-delete](https://www.rabbitmq.com/docs/queues#temporary-queues): The queue will be automatically deleted when its last connection is closed.
 
 ```go
-	queue, err := ch.QueueDeclare(
-		queueName,    // name
-		isDurable,    // durable
-		deleteUnused, // delete when unused
-		isExclusive,  // exclusive
-		false,        // no-wait
-		amqp.Table{
-			"x-dead-letter-exchange": "peril_dlx",
-		}, // args
-	)
+queue, err := ch.QueueDeclare(
+	queueName,    // name
+	isDurable,    // durable
+	deleteUnused, // delete when unused
+	isExclusive,  // exclusive
+	false,        // no-wait
+	amqp.Table{
+		"x-dead-letter-exchange": "peril_dlx",
+	}, // args
+)
 
-	err = ch.QueueBind(
-		queue.Name, // queue name
-		key,        // routing key
-		exchange,   // exchange
-		false,      // no-wait
-		nil,        // args
-	)
+err = ch.QueueBind(
+	queue.Name, // queue name
+	key,        // routing key
+	exchange,   // exchange
+	false,      // no-wait
+	nil,        // args
+)
 ```
 
 ### [Consumer](https://www.rabbitmq.com/docs/consumers#basics)
 
 ```go
-	msgs, err := ch.Consume(
-		queue.Name, // queue
-		"",         // consumer
-		false,      // auto-ack
-		false,      // exclusive
-		false,      // no-local
-		false,      // no-wait
-		nil,        // args
-	)
+msgs, err := ch.Consume(
+	queue.Name, // queue
+	"",         // consumer
+	false,      // auto-ack
+	false,      // exclusive
+	false,      // no-local
+	false,      // no-wait
+	nil,        // args
+)
 
-  	go func() {
-		defer ch.Close()
+go func() {
+	defer ch.Close()
 
-		for msg := range msgs {
-			target, err := unmarshaller(msg.Body)
-			if err != nil {
-				fmt.Printf("could not unmarshal message: %v\n", err)
-				continue
-			}
-			switch handler(target) {
-			case Ack:
-				msg.Ack(false)
-			case NackDiscard:
-				msg.Nack(false, false)
-			case NackRequeue:
-				msg.Nack(false, true)
-			}
+	for msg := range msgs {
+		target, err := unmarshaller(msg.Body)
+		if err != nil {
+			fmt.Printf("could not unmarshal message: %v\n", err)
+			continue
 		}
-	}()
+		switch handler(target) {
+		case Ack:
+			msg.Ack(false)
+		case NackDiscard:
+			msg.Nack(false, false)
+		case NackRequeue:
+			msg.Nack(false, true)
+		}
+	}
+}()
 ```
 
 
@@ -120,19 +120,19 @@ But that would slow everything down to a crawl due to the full network round tri
 
 Control prefetch count:
 ```go
-	/*
-		Qos controls how many messages or how many bytes the server will try to keep on
-		the network for consumers before receiving delivery acks.  The intent of Qos is
-		to make sure the network buffers stay full between the server and client.
-	*/
-	err := ch.Qos(
-		10,    // prefetchCount
-		0,     // prefetchSize
-		false, // global
-	)
-	if err != nil {
-		return fmt.Errorf("could not set qos: %v", err)
-	}
+/*
+  Qos controls how many messages or how many bytes the server will try to keep on
+  the network for consumers before receiving delivery acks.  The intent of Qos is
+  to make sure the network buffers stay full between the server and client.
+*/
+err := ch.Qos(
+	10,    // prefetchCount
+	0,     // prefetchSize
+	false, // global
+)
+if err != nil {
+	return fmt.Errorf("could not set qos: %v", err)
+}
 ```
 
 ### Quorum Queues
